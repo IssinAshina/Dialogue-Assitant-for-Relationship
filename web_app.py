@@ -10,8 +10,10 @@
 
 import json
 import os
+import sys
 import threading
 import uuid
+import webbrowser
 from datetime import datetime
 
 from flask import Flask, g, jsonify, render_template, request
@@ -24,10 +26,39 @@ MODEL_ID = "deepseek-v4-1-flash-260910"
 # 语义搜索相似度阈值（与命令行版保持一致）
 SIMILARITY_THRESHOLD = 0.3
 
-# 预计算知识向量文件（15条知识，BGE-M3向量）
-KNOWLEDGE_VECTORS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_vectors.json")
 
-app = Flask(__name__)
+def resource_path(relative_path):
+    """获取资源文件路径，兼容 PyInstaller 冻结模式（sys._MEIPASS）"""
+    base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+
+# 打包内嵌密钥（embedded_keys.py 已被 .gitignore 排除，仅打包时本地生成）
+try:
+    from embedded_keys import EMBEDDED_ARK_API_KEY, EMBEDDED_SILICONFLOW_API_KEY
+except ImportError:
+    EMBEDDED_ARK_API_KEY = ""
+    EMBEDDED_SILICONFLOW_API_KEY = ""
+
+
+def default_ark_key():
+    """火山引擎密钥：环境变量优先，其次打包内嵌密钥"""
+    return os.environ.get("ARK_API_KEY") or EMBEDDED_ARK_API_KEY or None
+
+
+def default_siliconflow_key():
+    """硅基流动密钥：环境变量优先，其次打包内嵌密钥"""
+    return os.environ.get("SILICONFLOW_API_KEY") or EMBEDDED_SILICONFLOW_API_KEY or None
+
+
+# 预计算知识向量文件（15条知识，BGE-M3向量）
+KNOWLEDGE_VECTORS_PATH = resource_path("knowledge_vectors.json")
+
+app = Flask(
+    __name__,
+    template_folder=resource_path("templates"),
+    static_folder=resource_path("static"),
+)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", uuid.uuid4().hex)
 
 
@@ -158,8 +189,8 @@ def get_dialogue_session():
     sid = request.cookies.get("dialogue_sid") or uuid.uuid4().hex
     g.dialogue_sid = sid
 
-    ark_api_key = os.environ.get("ARK_API_KEY") or (request.json or {}).get("ark_api_key") or None
-    siliconflow_api_key = os.environ.get("SILICONFLOW_API_KEY") or (request.json or {}).get("siliconflow_api_key") or None
+    ark_api_key = default_ark_key() or (request.json or {}).get("ark_api_key") or None
+    siliconflow_api_key = default_siliconflow_key() or (request.json or {}).get("siliconflow_api_key") or None
 
     with SESSIONS_LOCK:
         session = DIALOGUE_SESSIONS.get(sid)
@@ -180,8 +211,8 @@ def index():
 def api_status():
     """检查API密钥配置状态"""
     return jsonify({
-        "ark_configured": bool(os.environ.get("ARK_API_KEY")),
-        "siliconflow_configured": bool(os.environ.get("SILICONFLOW_API_KEY")),
+        "ark_configured": bool(default_ark_key()),
+        "siliconflow_configured": bool(default_siliconflow_key()),
         "model_id": MODEL_ID,
     })
 
@@ -277,7 +308,10 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f"模型：{MODEL_ID}")
     print(f"知识向量：{len(KNOWLEDGE_VECTORS)} 条已加载")
-    print("✓ 语义搜索功能已启用" if os.environ.get("SILICONFLOW_API_KEY") else "⚠️ 语义搜索功能不可用（未设置硅基流动API密钥）")
+    print("✓ 语义搜索功能已启用" if default_siliconflow_key() else "⚠️ 语义搜索功能不可用（未设置硅基流动API密钥）")
     print("\n请访问 http://127.0.0.1:5000 开始对话\n")
+
+    # 启动后自动打开浏览器（打包为可执行程序后方便面试官直接使用）
+    threading.Timer(1.2, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
 
     app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
