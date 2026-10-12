@@ -261,23 +261,6 @@ def api_reset():
     return jsonify({"ok": True})
 
 
-@app.route("/api/examples", methods=["GET"])
-def api_examples():
-    """获取示例对话列表"""
-    from 示例对话库 import DIALOGUE_EXAMPLES
-
-    examples = [
-        {
-            "id": ex["id"],
-            "title": ex["title"],
-            "scenario": ex["scenario"],
-            "initial_cognition": ex["initial_cognition"],
-        }
-        for ex in DIALOGUE_EXAMPLES
-    ]
-    return jsonify({"examples": examples})
-
-
 @app.route("/api/save", methods=["POST"])
 def api_save():
     """保存对话记录"""

@@ -6,8 +6,6 @@ import os
 import math
 import requests
 
-from knowledge_base import KNOWLEDGE_BASE
-
 def extract_response_text(response):
     """提取响应文本，处理不同的输出结构"""
     text_parts = []
@@ -79,56 +77,10 @@ class SiliconFlowEmbedding:
         
         return dot_product / (norm1 * norm2)
 
-class SemanticSearcher:
-    """语义搜索器"""
-    
-    def __init__(self, embedding_client=None):
-        self.embedding_client = embedding_client or SiliconFlowEmbedding()
-    
-    def search(self, query, knowledge_base, threshold=0.4):
-        """语义搜索"""
-        if not self.embedding_client.api_key:
-            return None
-        
-        query_embeddings = self.embedding_client.embed(query)
-        if not query_embeddings:
-            return None
-        
-        # 解包嵌套列表
-        query_embedding = query_embeddings[0] if isinstance(query_embeddings[0], list) else query_embeddings[0]
-        
-        # 确保query_embedding是一维列表
-        if isinstance(query_embedding[0], list):
-            query_embedding = query_embedding[0]
-        
-        for item in knowledge_base:
-            item_embeddings = self.embedding_client.embed(item["text"])
-            if not item_embeddings:
-                continue
-            
-            # 解包嵌套列表
-            item_embedding = item_embeddings[0] if isinstance(item_embeddings[0], list) else item_embeddings[0]
-            
-            # 确保item_embedding是一维列表
-            if isinstance(item_embedding[0], list):
-                item_embedding = item_embedding[0]
-            
-            similarity = self.embedding_client.cosine_similarity(query_embedding, item_embedding)
-            item["similarity"] = similarity
-        
-        matched_items = [item for item in knowledge_base if item.get("similarity", 0) >= threshold]
-        matched_items.sort(key=lambda x: x["similarity"], reverse=True)
-        
-        return matched_items if matched_items else None
-
 class TheoryAugmentedLLM:
-    """理论增强的大模型集成"""
-    
+    """理论增强的大模型集成（Web 版仅使用其固定提示词部分）"""
+
     def __init__(self):
-        # 初始化语义搜索器
-        self.embedding_client = SiliconFlowEmbedding()
-        self.searcher = SemanticSearcher(self.embedding_client)
-        
         # 固定部分：第1-5点
         self.fixed_prompt_part1 = """你是一个基于知识库中的理论和"建立健康的人际关系观"对话方法的知心朋友。
 
@@ -266,33 +218,6 @@ class TheoryAugmentedLLM:
 - 如果不确定，诚实地说明，并引导用户进一步表达
 
 请用中文回复，保持自然对话风格。"""
-    
-    def _build_dynamic_theory_section(self, user_input):
-        """动态生成第6点：根据用户输入调用的相关理论"""
-        matched_theories = self.searcher.search(user_input, KNOWLEDGE_BASE, threshold=0.3)
-        
-        theory_section = "## 六、理论基础（供你内部参考，不得直接输出）\n\n"
-        
-        if matched_theories and matched_theories[0].get("similarity", 0) >= 0.3:
-            theory_section += f"根据当前对话（相似度：{matched_theories[0]['similarity']:.2f}），以下是相关的理论参考：\n\n"
-            theory_section += matched_theories[0]["text"]
-        else:
-            theory_section += "当前对话可能与调用的理论无直接关联，请基于对话方法和示例对话进行引导。"
-        
-        return theory_section
-    
-    def _build_full_system_prompt(self, user_input):
-        """构建完整的系统提示词"""
-        return (
-            self.fixed_prompt_part1 +
-            self._build_dynamic_theory_section(user_input) +
-            self.fixed_prompt_part2
-        )
-    
-    def generate_response(self, user_input, ark_llm):
-        """生成回复"""
-        system_prompt = self._build_full_system_prompt(user_input)
-        return ark_llm.generate_response(system_prompt, user_input)
 
 class ArkLLM:
     """火山引擎大模型"""
@@ -348,48 +273,3 @@ class ArkLLM:
     
     def reset_context(self):
         self.previous_response_id = None
-
-class ArkDialogueSystem:
-    """增强版对话系统（带语义搜索）"""
-    
-    def __init__(self, api_key=None, model_id="deepseek-v4-1-flash-260910", thinking_enabled=False):
-        self.theory_augmented_llm = TheoryAugmentedLLM()
-        self.ark_llm = ArkLLM(api_key, model_id, thinking_enabled)
-    
-    def respond(self, user_input):
-        """生成回复"""
-        return self.theory_augmented_llm.generate_response(user_input, self.ark_llm)
-    
-    def reset_context(self):
-        """重置对话上下文"""
-        self.ark_llm.reset_context()
-
-def test_enhanced_system():
-    """测试增强版对话系统"""
-    print("=" * 60)
-    print("      增强版对话系统测试（带语义搜索）")
-    print("=" * 60)
-    
-    # 测试语义搜索
-    theory_llm = TheoryAugmentedLLM()
-    
-    test_inputs = [
-        "我向喜欢的女生表白被拒了，很难受",
-        "我觉得在关系中总是被对方利用",
-        "今天吃什么"
-    ]
-    
-    for user_input in test_inputs:
-        print(f"\n用户输入: {user_input}")
-        print("-" * 60)
-        theory_section = theory_llm._build_dynamic_theory_section(user_input)
-        print(theory_section)
-        print("=" * 60)
-
-if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "--test":
-        test_enhanced_system()
-    else:
-        print("请运行 python chat_interface_cn.py 使用对话系统")

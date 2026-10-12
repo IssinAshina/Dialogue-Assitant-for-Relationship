@@ -41,10 +41,8 @@
 | 文件 | 说明 |
 | --- | --- |
 | `web_app.py` | Flask 后端与浏览器会话管理 |
-| `cn_llm_integration.py` | 火山引擎 SDK 封装、系统提示词构建、语义搜索 |
-| `knowledge_base.py` / `knowledge_vectors.json` | 理论知识库与预计算的 BGE-M3 向量索引 |
-| `示例对话库.py` | 示例对话数据 |
-| `chat_interface_cn.py` | 命令行版对话界面 |
+| `cn_llm_integration.py` | 火山引擎 SDK 封装与系统提示词 |
+| `knowledge_vectors.json` | 理论知识库的预计算 BGE-M3 向量索引 |
 | `templates/` / `static/` | 前端页面与样式脚本 |
 | `文档/` | 理论文档与开发日志 |
 
