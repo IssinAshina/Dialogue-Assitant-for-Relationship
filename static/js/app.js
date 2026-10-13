@@ -12,6 +12,7 @@ const els = {
     resetBtn: document.getElementById("resetBtn"),
     saveBtn: document.getElementById("saveBtn"),
     thinkingToggle: document.getElementById("thinkingToggle"),
+    showThinkingToggle: document.getElementById("showThinkingToggle"),
     theoryCard: document.getElementById("theoryCard"),
     modelTag: document.getElementById("modelTag"),
     toast: document.getElementById("toast"),
@@ -76,7 +77,7 @@ function addTypingMessage() {
     wrap.className = "msg assistant";
     wrap.id = "pendingMsg";
     wrap.innerHTML = `
-        <div class="avatar">知</div>
+        <div class="avatar">AI</div>
         <div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div>`;
     els.messages.appendChild(wrap);
     scrollBottom();
@@ -89,7 +90,7 @@ function addErrorMessage(text) {
     const wrap = document.createElement("div");
     wrap.className = "msg assistant error";
     wrap.innerHTML = `
-        <div class="avatar">知</div>
+        <div class="avatar">AI</div>
         <div class="bubble"></div>`;
     wrap.querySelector(".bubble").textContent = text;
     els.messages.appendChild(wrap);
@@ -134,7 +135,7 @@ function finishAssistantMessage(text, theory) {
     const wrap = document.createElement("div");
     wrap.className = "msg assistant";
     wrap.innerHTML = `
-        <div class="avatar">知</div>
+        <div class="avatar">AI</div>
         <div class="bubble"></div>`;
     els.messages.appendChild(wrap);
     const bubble = wrap.querySelector(".bubble");
@@ -177,6 +178,7 @@ async function sendMessage() {
     const body = {
         message: text,
         thinking: els.thinkingToggle.checked,
+        show_thinking: els.showThinkingToggle.checked,
     };
     const arkKey = getKey(LS_ARK_KEY);
     const sfKey = getKey(LS_SF_KEY);
@@ -212,9 +214,13 @@ async function sendMessage() {
         els.emptyState.style.display = "none";
         const wrap = document.createElement("div");
         wrap.className = "msg assistant";
-        wrap.innerHTML = `<div class="avatar">知</div><div class="bubble"></div>`;
+        wrap.innerHTML = `<div class="avatar">AI</div><div class="bubble"></div>`;
         els.messages.appendChild(wrap);
         const bubble = wrap.querySelector(".bubble");
+
+        // 思考过程区块（仅在收到 thinking 事件时创建）
+        let thinkingWrap = null;
+        let thinkingContent = null;
 
         if (!res.body) {
             addErrorMessage("当前浏览器不支持流式读取，请改用最新版 Chrome/Edge。");
@@ -241,6 +247,16 @@ async function sendMessage() {
                 try { evt = JSON.parse(payload); } catch (e) { continue; }
                 if (evt.type === "theory" && evt.theory) {
                     renderTheory(evt.theory);
+                } else if (evt.type === "thinking") {
+                    if (!thinkingWrap) {
+                        thinkingWrap = document.createElement("div");
+                        thinkingWrap.className = "thinking-block";
+                        thinkingWrap.innerHTML = `<div class="thinking-head">思考过程</div><div class="thinking-body"></div>`;
+                        wrap.insertBefore(thinkingWrap, bubble);
+                        thinkingContent = thinkingWrap.querySelector(".thinking-body");
+                    }
+                    thinkingContent.textContent += evt.content;
+                    scrollBottom();
                 } else if (evt.type === "text") {
                     bubble.textContent += evt.content;
                     scrollBottom();

@@ -310,6 +310,7 @@ def api_chat_stream():
         return jsonify({"error": "请输入内容后再发送"}), 400
 
     thinking_enabled = bool(data.get("thinking", False))
+    show_thinking = bool(data.get("show_thinking", False))
 
     session = get_dialogue_session()
     session.ensure_keys(
@@ -350,9 +351,12 @@ def api_chat_stream():
             yield f"data: {json.dumps({'type': 'theory', 'theory': theory}, ensure_ascii=False)}\n\n"
 
             full_reply = []
-            for chunk in session.ark_llm.generate_response_stream(system_prompt, user_input):
-                full_reply.append(chunk)
-                yield f"data: {json.dumps({'type': 'text', 'content': chunk}, ensure_ascii=False)}\n\n"
+            for kind, chunk in session.ark_llm.generate_response_stream(system_prompt, user_input, show_thinking=show_thinking):
+                if kind == "text":
+                    full_reply.append(chunk)
+                    yield f"data: {json.dumps({'type': 'text', 'content': chunk}, ensure_ascii=False)}\n\n"
+                elif kind == "thinking":
+                    yield f"data: {json.dumps({'type': 'thinking', 'content': chunk}, ensure_ascii=False)}\n\n"
 
             reply_text = "".join(full_reply)
             session.conversation_log.append(("用户", user_input))
