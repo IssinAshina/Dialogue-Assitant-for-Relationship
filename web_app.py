@@ -26,6 +26,32 @@ MODEL_ID = "deepseek-v4-1-flash-260910"
 # 语义搜索相似度阈值（与命令行版保持一致）
 SIMILARITY_THRESHOLD = 0.3
 
+# 心理危机关键词硬匹配（确定性，不依赖模型输出）
+CRISIS_KEYWORDS = [
+    "自杀", "想自杀", "自杀倾向", "轻生", "自残", "自伤", "割腕", "跳楼",
+    "上吊", "服毒", "结束生命", "了结生命", "不想活", "不想活了", "活不下去",
+    "活不下去了", "想死", "去死", "一了百了", "活着没意思", "活着没意义",
+    "没有活下去的意义", "没有活下去的理由", "崩溃到想", "抑郁到想",
+]
+
+# 触发心理危机时的固定回复（停止追问、引导专业求助，不做任何诊断或治疗建议）
+CRISIS_REPLY = (
+    "我听到你现在非常痛苦，这种感受是真实的，你不是一个人。\n\n"
+    "但我没办法在这些事情上真正帮到你，也请你不要伤害自己。"
+    "请尽快联系专业心理援助：\n"
+    "- 全国心理援助热线：400-161-9995\n"
+    "- 北京心理危机研究与干预中心：010-82951332\n"
+    "- 生命热线：400-821-1215\n\n"
+    "如果此刻有立即的危险，请直接拨打 120 或 110。请一定找专业的人聊聊。"
+)
+
+
+def detect_crisis(text):
+    """检测用户输入是否涉及自伤/自杀/严重心理危机"""
+    if not text:
+        return False
+    return any(kw in text for kw in CRISIS_KEYWORDS)
+
 
 def resource_path(relative_path):
     """获取资源文件路径，兼容 PyInstaller 冻结模式（sys._MEIPASS）"""
@@ -130,6 +156,7 @@ class WebDialogueSession:
         self.embedding_client = SiliconFlowEmbedding(siliconflow_api_key)
         self.ark_llm = ArkLLM(api_key=ark_api_key, model_id=MODEL_ID, thinking_enabled=thinking_enabled)
         self.conversation_log = []
+        self.crisis_ended = False  # 心理危机命中后标记为已结束，不再继续引导
         self.lock = threading.Lock()
 
     def ensure_keys(self, ark_api_key, siliconflow_api_key, thinking_enabled):
@@ -144,6 +171,19 @@ class WebDialogueSession:
 
     def respond(self, user_input, thinking_enabled):
         """生成回复"""
+        # 硬防护：会话已因心理危机结束，固定回复且不再调用模型
+        if self.crisis_ended:
+            self.conversation_log.append(("用户", user_input))
+            self.conversation_log.append(("对话助手", CRISIS_REPLY))
+            return CRISIS_REPLY, None
+
+        # 硬防护：命中心理危机关键词，结束引导并返回固定求助话术
+        if detect_crisis(user_input):
+            self.crisis_ended = True
+            self.conversation_log.append(("用户", user_input))
+            self.conversation_log.append(("对话助手", CRISIS_REPLY))
+            return CRISIS_REPLY, None
+
         self.ark_llm.thinking_enabled = thinking_enabled
 
         # 语义检索相关理论
@@ -168,6 +208,7 @@ class WebDialogueSession:
         """重置对话上下文"""
         self.ark_llm.reset_context()
         self.conversation_log = []
+        self.crisis_ended = False
 
 
 # 浏览器会话 -> 对话会话
