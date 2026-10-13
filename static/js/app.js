@@ -91,7 +91,7 @@ function addErrorMessage(text) {
     wrap.className = "msg assistant error";
     wrap.innerHTML = `
         <div class="avatar">AI</div>
-        <div class="bubble"></div>`;
+        <div class="msg-content"><div class="bubble"></div></div>`;
     wrap.querySelector(".bubble").textContent = text;
     els.messages.appendChild(wrap);
     scrollBottom();
@@ -136,7 +136,7 @@ function finishAssistantMessage(text, theory) {
     wrap.className = "msg assistant";
     wrap.innerHTML = `
         <div class="avatar">AI</div>
-        <div class="bubble"></div>`;
+        <div class="msg-content"><div class="bubble"></div></div>`;
     els.messages.appendChild(wrap);
     const bubble = wrap.querySelector(".bubble");
     typewriter(bubble, text, () => {
@@ -214,9 +214,10 @@ async function sendMessage() {
         els.emptyState.style.display = "none";
         const wrap = document.createElement("div");
         wrap.className = "msg assistant";
-        wrap.innerHTML = `<div class="avatar">AI</div><div class="bubble"></div>`;
+        wrap.innerHTML = `<div class="avatar">AI</div><div class="msg-content"><div class="bubble"></div></div>`;
         els.messages.appendChild(wrap);
         const bubble = wrap.querySelector(".bubble");
+        const msgContent = wrap.querySelector(".msg-content");
 
         // 思考过程区块（仅在收到 thinking 事件时创建）
         let thinkingWrap = null;
@@ -252,7 +253,7 @@ async function sendMessage() {
                         thinkingWrap = document.createElement("div");
                         thinkingWrap.className = "thinking-block";
                         thinkingWrap.innerHTML = `<div class="thinking-head">思考过程</div><div class="thinking-body"></div>`;
-                        wrap.insertBefore(thinkingWrap, bubble);
+                        msgContent.insertBefore(thinkingWrap, bubble);
                         thinkingContent = thinkingWrap.querySelector(".thinking-body");
                     }
                     thinkingContent.textContent += evt.content;
