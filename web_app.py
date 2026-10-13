@@ -16,7 +16,7 @@ import uuid
 import webbrowser
 from datetime import datetime
 
-from flask import Flask, g, jsonify, render_template, request
+from flask import Flask, Response, g, jsonify, render_template, request
 
 from cn_llm_integration import ArkLLM, SiliconFlowEmbedding, TheoryAugmentedLLM
 
@@ -291,6 +291,76 @@ def api_chat():
         }
 
     return jsonify({"reply": reply, "theory": theory})
+
+
+@app.route("/api/chat/stream", methods=["POST"])
+def api_chat_stream():
+    """流式对话接口（SSE）。
+
+    事件协议：
+      - {"type":"theory","theory":{...}|null}  命中的理论（可能为 null）
+      - {"type":"text","content":"..."}          回答文本片段（多次）
+      - {"type":"done"}                           流式结束
+    心理危机命中时不进入流式，直接返回 JSON {"crisis":true,"reply":"..."}。
+    """
+    data = request.get_json(silent=True) or {}
+    user_input = (data.get("message") or "").strip()
+
+    if not user_input:
+        return jsonify({"error": "请输入内容后再发送"}), 400
+
+    thinking_enabled = bool(data.get("thinking", False))
+
+    session = get_dialogue_session()
+    session.ensure_keys(
+        data.get("ark_api_key"),
+        data.get("siliconflow_api_key"),
+        thinking_enabled,
+    )
+
+    # 硬防护：心理危机命中，不进入流式
+    if session.crisis_ended or detect_crisis(user_input):
+        session.crisis_ended = True
+        with session.lock:
+            session.conversation_log.append(("用户", user_input))
+            session.conversation_log.append(("对话助手", CRISIS_REPLY))
+        return jsonify({"crisis": True, "reply": CRISIS_REPLY})
+
+    def generate():
+        with session.lock:
+            session.ark_llm.thinking_enabled = thinking_enabled
+
+            # 语义检索相关理论
+            matched = semantic_lookup(user_input, session.embedding_client)
+
+            # 构建完整的系统提示词
+            system_prompt = (
+                PROMPT_BUILDER.fixed_prompt_part1 +
+                build_theory_section(matched) +
+                PROMPT_BUILDER.fixed_prompt_part2
+            )
+
+            theory = None
+            if matched:
+                theory = {
+                    "name": matched["name"],
+                    "type": matched["type"],
+                    "similarity": round(matched["similarity"], 3),
+                }
+            yield f"data: {json.dumps({'type': 'theory', 'theory': theory}, ensure_ascii=False)}\n\n"
+
+            full_reply = []
+            for chunk in session.ark_llm.generate_response_stream(system_prompt, user_input):
+                full_reply.append(chunk)
+                yield f"data: {json.dumps({'type': 'text', 'content': chunk}, ensure_ascii=False)}\n\n"
+
+            reply_text = "".join(full_reply)
+            session.conversation_log.append(("用户", user_input))
+            session.conversation_log.append(("对话助手", reply_text))
+
+        yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+    return Response(generate(), mimetype="text/event-stream")
 
 
 @app.route("/api/reset", methods=["POST"])

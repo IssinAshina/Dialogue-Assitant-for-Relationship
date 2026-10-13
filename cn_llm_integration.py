@@ -271,6 +271,52 @@ class ArkLLM:
                 return f"连接模型时出现错误：{str(e)}"
         else:
             return "请先安装火山引擎SDK：pip install 'volcengine-python-sdk[ark]'"
-    
+
+    def generate_response_stream(self, system_prompt, user_input):
+        """流式生成回复（生成器）。
+
+        仅 yield 最终回答文本片段，跳过深度思考过程（reasoning），
+        保证开启 thinking 时界面不输出思考链。
+        结束时把模型返回的 response.id 记到 self.previous_response_id，
+        供多轮对话上下文续接。
+        """
+        if not self.use_sdk:
+            yield "请先安装火山引擎SDK：pip install 'volcengine-python-sdk[ark]'"
+            return
+
+        try:
+            thinking_config = {
+                "type": "enabled" if self.thinking_enabled else "disabled"
+            }
+
+            params = {
+                "model": self.model_id,
+                "input": user_input,
+                "instructions": system_prompt,
+                "temperature": 0.7,
+                "max_output_tokens": 2048,
+                "thinking": thinking_config,
+                "stream": True,
+            }
+
+            if self.previous_response_id:
+                params["previous_response_id"] = self.previous_response_id
+
+            response = self.ark.responses.create(**params)
+
+            for event in response:
+                event_type = type(event).__name__
+                # 只输出回答文本，过滤掉思考过程
+                if event_type == "ResponseTextDeltaEvent":
+                    delta = getattr(event, "delta", None)
+                    if delta:
+                        yield delta
+                elif event_type == "ResponseCompletedEvent":
+                    resp = getattr(event, "response", None)
+                    if resp is not None:
+                        self.previous_response_id = getattr(resp, "id", self.previous_response_id)
+        except Exception as e:
+            yield f"连接模型时出现错误：{str(e)}"
+
     def reset_context(self):
         self.previous_response_id = None

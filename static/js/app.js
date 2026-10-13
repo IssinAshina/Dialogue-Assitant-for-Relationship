@@ -184,16 +184,71 @@ async function sendMessage() {
     if (sfKey) body.siliconflow_api_key = sfKey;
 
     try {
-        const res = await fetch("/api/chat", {
+        const res = await fetch("/api/chat/stream", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
-        const data = await res.json();
-        if (!res.ok) {
-            addErrorMessage(data.error || "服务出现未知错误，请稍后重试。");
-        } else {
-            finishAssistantMessage(data.reply, data.theory);
+
+        const contentType = res.headers.get("content-type") || "";
+
+        // 非流式响应：心理危机命中或参数错误
+        if (!contentType.includes("text/event-stream")) {
+            const data = await res.json();
+            document.getElementById("pendingMsg")?.remove();
+            if (data.crisis) {
+                finishAssistantMessage(data.reply, null);
+            } else if (!res.ok) {
+                addErrorMessage(data.error || "服务出现未知错误，请稍后重试。");
+            } else {
+                finishAssistantMessage(data.reply, data.theory);
+            }
+            return;
+        }
+
+        // 流式响应：创建助手气泡，逐段追加文本
+        document.getElementById("pendingMsg")?.remove();
+        hasConversation = true;
+        els.emptyState.style.display = "none";
+        const wrap = document.createElement("div");
+        wrap.className = "msg assistant";
+        wrap.innerHTML = `<div class="avatar">知</div><div class="bubble"></div>`;
+        els.messages.appendChild(wrap);
+        const bubble = wrap.querySelector(".bubble");
+
+        if (!res.body) {
+            addErrorMessage("当前浏览器不支持流式读取，请改用最新版 Chrome/Edge。");
+            return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        let streamDone = false;
+
+        while (!streamDone) {
+            const { value, done } = await reader.read();
+            streamDone = done;
+            if (!value) continue;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || ""; // 保留未完成的最后一行
+            for (const line of lines) {
+                if (!line.startsWith("data:")) continue;
+                const payload = line.slice(5).trim();
+                if (!payload) continue;
+                let evt;
+                try { evt = JSON.parse(payload); } catch (e) { continue; }
+                if (evt.type === "theory" && evt.theory) {
+                    renderTheory(evt.theory);
+                } else if (evt.type === "text") {
+                    bubble.textContent += evt.content;
+                    scrollBottom();
+                } else if (evt.type === "error") {
+                    addErrorMessage(evt.message || "服务出现错误");
+                    return;
+                }
+            }
         }
     } catch (err) {
         addErrorMessage("无法连接到本地服务，请确认 web_app.py 正在运行。");
