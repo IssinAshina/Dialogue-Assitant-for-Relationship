@@ -304,7 +304,7 @@ def api_reset():
 
 @app.route("/api/save", methods=["POST"])
 def api_save():
-    """保存对话记录"""
+    """返回对话记录文本内容，由前端选择保存位置（不写入服务器磁盘）"""
     session = get_dialogue_session()
 
     if not session.conversation_log:
@@ -313,16 +313,18 @@ def api_save():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"对话记录_{timestamp}.txt"
 
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write("=" * 60 + "\n")
-        f.write("关系动力学对话记录\n")
-        f.write(f"时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write("=" * 60 + "\n\n")
+    lines = []
+    lines.append("=" * 60)
+    lines.append("关系动力学对话记录")
+    lines.append(f"时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("=" * 60)
+    lines.append("")
 
-        for role, message in session.conversation_log:
-            f.write(f"{role}：{message}\n\n")
+    for role, message in session.conversation_log:
+        lines.append(f"{role}：{message}")
+        lines.append("")
 
-    return jsonify({"ok": True, "filename": filename})
+    return jsonify({"ok": True, "filename": filename, "content": "\n".join(lines)})
 
 
 if __name__ == "__main__":

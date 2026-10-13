@@ -223,11 +223,38 @@ async function saveConversation() {
     try {
         const res = await fetch("/api/save", { method: "POST" });
         const data = await res.json();
-        if (res.ok) {
-            toast(`对话记录已保存到：${data.filename}`);
-        } else {
-            toast(data.error || "保存失败");
+        if (!res.ok) { toast(data.error || "保存失败"); return; }
+
+        const blob = new Blob([data.content], { type: "text/plain;charset=utf-8" });
+
+        // 优先使用 File System Access API，让用户选择保存位置
+        if (window.showSaveFilePicker) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: data.filename,
+                    types: [{ description: "文本文件", accept: { "text/plain": [".txt"] } }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                toast("对话记录已保存");
+                return;
+            } catch (err) {
+                if (err.name === "AbortError") return; // 用户取消了选择
+                toast("保存失败，尝试浏览器下载…");
+            }
         }
+
+        // 回退：触发浏览器下载（用户可在下载对话框中选择位置）
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = data.filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast("对话记录已下载");
     } catch (e) {
         toast("无法连接到本地服务");
     }

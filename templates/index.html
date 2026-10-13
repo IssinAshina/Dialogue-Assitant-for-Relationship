@@ -63,7 +63,7 @@
                     </label>
                     <button class="ghost-btn" id="saveBtn" title="保存对话记录">保存记录</button>
                     <button class="ghost-btn" id="resetBtn" title="重置对话上下文">重置对话</button>
-                    <button class="ghost-btn" id="settingsToggle" title="API密钥设置">密钥设置</button>
+                    <button class="ghost-btn" id="settingsToggle" title="API密钥设置">API设置</button>
                 </div>
             </div>
 
@@ -72,11 +72,6 @@
                 <div class="empty-state" id="emptyState">
                     <p class="empty-greeting">您好！我是基于关系动力学理论的对话助手。</p>
                     <p class="empty-sub">请描述您遇到的人际关系问题，我会陪伴您一起思考。</p>
-                    <div class="empty-tips">
-                        <span>表白被拒后难以释怀</span>
-                        <span>朋友借钱，不想借又怕伤感情</span>
-                        <span>总觉得对方不理解自己</span>
-                    </div>
                 </div>
                 <!-- 消息列表 -->
                 <div class="messages" id="messages"></div>
@@ -98,7 +93,7 @@
     <div class="modal-mask" id="settingsModal">
         <div class="modal" role="dialog" aria-labelledby="settingsTitle">
             <div class="modal-head">
-                <h3 id="settingsTitle">密钥设置</h3>
+                <h3 id="settingsTitle">API设置</h3>
                 <button class="icon-btn" id="settingsClose" aria-label="关闭">×</button>
             </div>
             <p class="modal-sub">密钥仅保存在本浏览器（localStorage），随请求发送到本机服务。也可通过环境变量 <code>ARK_API_KEY</code> 与 <code>SILICONFLOW_API_KEY</code> 配置。</p>
